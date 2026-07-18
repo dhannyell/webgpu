@@ -34,9 +34,16 @@ var (
 		DstFactor: BlendFactorZero,
 		Operation: BlendOperationAdd,
 	}
+
 	BlendComponentOver = BlendComponent{
 		SrcFactor: BlendFactorOne,
 		DstFactor: BlendFactorOneMinusSrcAlpha,
+		Operation: BlendOperationAdd,
+	}
+
+	BlendComponentAdd = BlendComponent{
+		SrcFactor: BlendFactorSrcAlpha,
+		DstFactor: BlendFactorOne,
 		Operation: BlendOperationAdd,
 	}
 
@@ -44,6 +51,12 @@ var (
 		Color: BlendComponentReplace,
 		Alpha: BlendComponentReplace,
 	}
+
+	BlendStateAdd = BlendState{
+		Color: BlendComponentAdd,
+		Alpha: BlendComponentAdd,
+	}
+
 	BlendStateAlphaBlending = BlendState{
 		Color: BlendComponent{
 			SrcFactor: BlendFactorSrcAlpha,
