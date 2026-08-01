@@ -22,7 +22,7 @@ func cPassTimestampWrites(w *PassTimestampWrites) (*C.WGPUPassTimestampWrites, f
 	writes.beginningOfPassWriteIndex = C.uint32_t(w.BeginningOfPassWriteIndex)
 	writes.endOfPassWriteIndex = C.uint32_t(w.EndOfPassWriteIndex)
 	return writes, func() { free(writes) }
-}
+	}
 
 func (p *CommandEncoder) BeginComputePass(descriptor *ComputePassDescriptor) *ComputePassEncoder {
 	var desc C.WGPUComputePassDescriptor
