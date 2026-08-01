@@ -147,10 +147,10 @@ package wgpu
 #cgo nocallback wgpuPipelineLayoutRelease
 #cgo noescape wgpuQuerySetRelease
 #cgo nocallback wgpuQuerySetRelease
+#cgo noescape wgpuQueueGetTimestampPeriod
+#cgo nocallback wgpuQueueGetTimestampPeriod
 #cgo noescape wgpuQueueRelease
 #cgo nocallback wgpuQueueRelease
-#cgo noescape wgpuQueueSubmitForIndex
-#cgo nocallback wgpuQueueSubmitForIndex
 #cgo noescape wgpuRenderBundleEncoderDraw
 #cgo nocallback wgpuRenderBundleEncoderDraw
 #cgo noescape wgpuRenderBundleEncoderDrawIndexed
