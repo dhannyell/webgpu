@@ -1,1 +1,1 @@
-module github.com/oliverbestmann/webgpu/libs-linux
+module github.com/dhannyell/webgpu/libs-linux
