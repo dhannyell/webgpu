@@ -1,1 +1,1 @@
-module github.com/oliverbestmann/webgpu/libs-darwin
+module github.com/dhannyell/webgpu/libs-darwin
