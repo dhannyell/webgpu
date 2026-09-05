@@ -1,1 +1,1 @@
-module github.com/oliverbestmann/webgpu/libs-windows
+module github.com/dhannyell/webgpu/libs-windows
