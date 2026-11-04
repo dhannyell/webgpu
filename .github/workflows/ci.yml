@@ -36,10 +36,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "stable"
 
@@ -61,6 +61,7 @@ jobs:
           export WGPU_FORCE_FALLBACK_ADAPTER=1
           export WGPU_LOG_LEVEL=TRACE
           go test ./...
+        shell: bash
 
       - name: Run examples
         if: ${{ matrix.run_examples }}
@@ -84,16 +85,42 @@ jobs:
     env:
       GOOS: js
       GOARCH: wasm
+      CGO_ENABLED: "0"
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version: "stable"
 
-      - name: Build a wasm file
+      - name: Vet
         run: |
-          go build ./examples/triangle
+          go vet ./wgpu/
+          go vet -tags goscript ./wgpu/
+
+      - name: Build examples
+        run: |
+          for example in adapters capture compute triangle ; do
+            go build -o /dev/null ./examples/$example
+          done
+
+  generated-code:
+    name: "Generated code is up to date"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: "stable"
+
+      - name: Regenerate and compare
+        run: |
+          go generate ./wgpu
+          git diff --exit-code

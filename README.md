@@ -7,7 +7,7 @@ Current upstream version: v29.0.0.0
 
 ## Fork
 
-This is a fork of `github.com/oliverbestmann/webgpu`. It follows upstream release `v1.34.1`. Its own versions start at `v1.35.0` — a patch bump per fix, a minor bump per upstream sync.
+This is a fork of `github.com/oliverbestmann/webgpu`. It follows upstream release `v1.37.2`. Its own versions start at `v1.35.0` — a patch bump per fix, a minor bump per upstream sync.
 
 Sync is `git fetch upstream` (the upstream remote is configured with `tagOpt --no-tags`) followed by `git merge` into `fk-main`. Upstream tags are not carried by the fork.
 
