@@ -11,8 +11,8 @@ func (g *Surface) GetCapabilities(adapter *Adapter) (ret SurfaceCapabilities) {
 }
 
 func (g *Surface) Configure(device *Device, config *SurfaceConfiguration) {
-	jsConfig := pointerToJS(config).(map[string]any)
-	jsConfig["device"] = pointerToJS(device)
+	jsConfig := config.toJS()
+	jsConfig.Set("device", pointerToJS(device))
 	g.jsValue.Call("configure", jsConfig)
 }
 

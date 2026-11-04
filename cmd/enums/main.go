@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"cmp"
+	_ "embed"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"go/format"
@@ -13,6 +15,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"unicode"
 
 	"slices"
@@ -84,7 +87,7 @@ func main() {
 
 	var enums = Enums{}
 
-	re := regexp.MustCompile("(?m)^(static const .*)?\\s*WGPU([A-Za-z0-9]+)_([A-Za-z0-9]+) = 0x([0-9A-F]+)")
+	re := regexp.MustCompile("(?m)^(static const .*)?\\s*WGPU([A-Za-z0-9]+)_([A-Za-z0-9_]+) = 0x([0-9A-F]+)")
 
 	for _, match := range re.FindAllStringSubmatch(in, -1) {
 		goType := "uint32"
@@ -157,7 +160,11 @@ func main() {
 				}
 				b.WriteRune(r)
 			}
-			fmt.Fprintf(w, "return \"%s\"\n", b.String())
+			jsName := b.String()
+			if name, ok := specName(e.Name, strings.TrimPrefix(v.Enum, e.Name)); ok {
+				jsName = name
+			}
+			fmt.Fprintf(w, "return \"%s\"\n", jsName)
 		}
 		if e.Name == "ErrorType" {
 			fmt.Fprintf(w, "default:\n")
@@ -175,6 +182,38 @@ func main() {
 	must(out.Close())
 }
 
+// webgpu_enums.json holds the enum values of the WebGPU spec, keyed by the IDL
+// enum name without the GPU prefix. Taken from the IDL index of
+// https://gpuweb.github.io/gpuweb/, update it when the headers gain values.
+//
+//go:embed webgpu_enums.json
+var specEnumsJSON []byte
+
+var specEnums = sync.OnceValue(func() map[string][]string {
+	var enums map[string][]string
+	must(json.Unmarshal(specEnumsJSON, &enums))
+	return enums
+})
+
+// specName finds the spec string of an enum value by comparing names without
+// case and separators: BC1RGBAUnorm matches "bc1-rgba-unorm".
+func specName(goType, name string) (string, bool) {
+	if goType == "CompositeAlphaMode" {
+		goType = "CanvasAlphaMode"
+	}
+
+	normalize := strings.NewReplacer("-", "", "_", "")
+	key := strings.ToLower(normalize.Replace(name))
+
+	for _, value := range specEnums()[goType] {
+		if normalize.Replace(value) == key {
+			return value, true
+		}
+	}
+
+	return "", false
+}
+
 func generateVertexFormatSize(w io.Writer, enum TypedefEnum) {
 	re := regexp.MustCompile("([0-9]+)(?:x([1234]+))?")
 
@@ -182,6 +221,12 @@ func generateVertexFormatSize(w io.Writer, enum TypedefEnum) {
 	fmt.Fprintln(w, "switch v {")
 
 	for _, enumItem := range enum.Enums {
+		// packed format, the regexp below would read the first component only
+		if strings.HasSuffix(enumItem.Enum, "10_10_10_2") {
+			fmt.Fprintf(w, "case %s: return 4\n", enumItem.Enum)
+			continue
+		}
+
 		match := re.FindStringSubmatch(enumItem.Enum)
 		if match == nil {
 			panic("no match in " + enumItem.Enum)

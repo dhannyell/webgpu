@@ -14,32 +14,13 @@ import (
 )
 
 func (g *Surface) GetCapabilities(adapter *Adapter) (ret SurfaceCapabilities) {
+	// wgpu-native allocates the arrays on every call (NULL when empty), they must
+	// be freed with wgpuSurfaceCapabilitiesFreeMembers.
 	var caps C.WGPUSurfaceCapabilities
-	C.wgpuSurfaceGetCapabilities(g.ref, adapter.ref, &caps)
-
-	if caps.alphaModeCount == 0 && caps.formatCount == 0 && caps.presentModeCount == 0 {
+	if C.wgpuSurfaceGetCapabilities(g.ref, adapter.ref, &caps) != C.WGPUStatus_Success {
 		return
 	}
-	if caps.formatCount > 0 {
-		formats, formatsSlice := callocSlice[C.WGPUTextureFormat](int(caps.formatCount))
-		defer free(formats)
-		caps.formats = formats
-		_ = formatsSlice
-	}
-	if caps.presentModeCount > 0 {
-		presentModes, presentModesSlice := callocSlice[C.WGPUPresentMode](int(caps.presentModeCount))
-		defer free(presentModes)
-		caps.presentModes = presentModes
-		_ = presentModesSlice
-	}
-	if caps.alphaModeCount > 0 {
-		alphaModes, alphaModesSlice := callocSlice[C.WGPUCompositeAlphaMode](int(caps.alphaModeCount))
-		defer free(alphaModes)
-		caps.alphaModes = alphaModes
-		_ = alphaModesSlice
-	}
-
-	C.wgpuSurfaceGetCapabilities(g.ref, adapter.ref, &caps)
+	defer C.wgpuSurfaceCapabilitiesFreeMembers(caps)
 
 	if caps.formatCount > 0 {
 		formatsTmp := unsafe.Slice((*TextureFormat)(caps.formats), caps.formatCount)
@@ -109,8 +90,16 @@ func (g *Surface) Configure(device *Device, config *SurfaceConfiguration) {
 	C.wgpuSurfaceConfigure(g.ref, cfg)
 }
 
-// NOTE: you should typically not call [Texture.Release] on the returned texture.
-// Instead, you should call [TextureView.Release] on any [TextureView] you create from it.
+// The caller owns the returned texture and must call [Texture.Release] on it
+// after [Surface.Present] and before acquiring the next texture, or when abandoning
+// the frame. Releasing it before Present, or after the next acquire, discards the
+// current frame.
+//
+// Unlike other objects, the texture is not released by the garbage collector, as
+// that could happen at any time. A [TextureView] does not keep its texture reachable,
+// so code that keeps only the view would lose the frame if the texture got collected
+// before Present.
+//
 // You need to check the status of the returned texture, or use SurfaceTexture.Get.
 func (g *Surface) TryGetCurrentTexture() (SurfaceTexture, error) {
 	if g.device == nil {
@@ -140,6 +129,10 @@ func (g *Surface) TryGetCurrentTexture() (SurfaceTexture, error) {
 	var texture *Texture
 	if surfaceTexture.texture != nil {
 		C.wgpuDeviceAddRef(g.device)
+
+		// No releaseOnGC, see the doc comment. wgpu-native keeps one presented flag per
+		// surface and resets it on acquire, so the release timing decides whether the
+		// frame is discarded.
 		texture = &Texture{device: g.device, ref: surfaceTexture.texture}
 	}
 

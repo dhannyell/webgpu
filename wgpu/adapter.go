@@ -7,26 +7,42 @@ package wgpu
 #include <stdlib.h>
 #include <wgpu.h>
 
-extern void gowebgpu_request_device_callback_c(WGPURequestDeviceStatus status, WGPUDevice device, char const *message, void *userdata);
-extern void gowebgpu_device_lost_callback_c(WGPUDevice const * device, WGPUDeviceLostReason reason, WGPUStringView message, void * userdata1, void * userdata2);
+#include "callbacks.h"
+
+// wgpuAdapterInfoFreeMembers takes the struct by value; calling it from C keeps
+// that copy off the Go stack.
+static inline void gowebgpu_adapter_info_free_members(WGPUAdapterInfo * info) {
+  wgpuAdapterInfoFreeMembers(*info);
+}
+
+static inline void gowebgpu_supported_features_free_members(WGPUSupportedFeatures * features) {
+  wgpuSupportedFeaturesFreeMembers(*features);
+}
 
 */
 import "C"
 import (
-	"errors"
+	"fmt"
 	"unsafe"
 )
 
 func (g *Adapter) GetFeatures() []FeatureName {
-	var supportedFeatures C.WGPUSupportedFeatures
-	C.wgpuAdapterGetFeatures(g.ref, (*C.WGPUSupportedFeatures)(unsafe.Pointer(&supportedFeatures)))
-	defer free(supportedFeatures.features)
+	supported := callocOne[C.WGPUSupportedFeatures]()
+	defer free(supported)
 
-	features := make([]FeatureName, supportedFeatures.featureCount)
+	C.wgpuAdapterGetFeatures(g.ref, supported)
+	return takeFeatures(supported)
+}
 
-	for i := range int(supportedFeatures.featureCount) {
-		offset := uintptr(i) * sizeOf[C.WGPUFeatureName]()
-		features[i] = FeatureName(*(*C.WGPUFeatureName)(unsafe.Pointer(uintptr(unsafe.Pointer(supportedFeatures.features)) + offset)))
+// takeFeatures copies the features and frees the array that wgpu-native allocated,
+// which libc free must not touch. The struct lives in C memory, because an empty
+// list comes back as a dangling pointer that the Go runtime rejects on a stack.
+func takeFeatures(supported *C.WGPUSupportedFeatures) []FeatureName {
+	defer C.gowebgpu_supported_features_free_members(supported)
+
+	features := make([]FeatureName, supported.featureCount)
+	if len(features) > 0 {
+		copy(features, unsafe.Slice((*FeatureName)(unsafe.Pointer(supported.features)), len(features)))
 	}
 
 	return features
@@ -93,9 +109,14 @@ func newNativeLimitsChain() *C.WGPUNativeLimits {
 }
 
 func (g *Adapter) GetInfo() AdapterInfo {
-	var info C.WGPUAdapterInfo
+	// wgpu-native returns an empty string as a dangling pointer (0x1). The
+	// struct lives in C memory, because the Go runtime aborts on such a pointer
+	// when it copies a goroutine stack that holds one.
+	info := callocOne[C.WGPUAdapterInfo]()
+	defer free(info)
 
-	C.wgpuAdapterGetInfo(g.ref, &info)
+	C.wgpuAdapterGetInfo(g.ref, info)
+	defer C.gowebgpu_adapter_info_free_members(info)
 
 	return AdapterInfo{
 		Vendor:       C.GoStringN(info.vendor.data, C.int(info.vendor.length)),
@@ -247,10 +268,12 @@ func (g *Adapter) RequestDevice(descriptor *DeviceDescriptor) (*Device, error) {
 
 	var status RequestDeviceStatus
 	var device *Device
+	var message string
 
-	var cb requestDeviceCb = func(s RequestDeviceStatus, d *Device, _ string) {
+	var cb requestDeviceCb = func(s RequestDeviceStatus, d *Device, m string) {
 		status = s
 		device = d
+		message = m
 	}
 	handle := newHandle(cb)
 	C.wgpuAdapterRequestDevice(g.ref, desc, C.WGPURequestDeviceCallbackInfo{
@@ -260,7 +283,7 @@ func (g *Adapter) RequestDevice(descriptor *DeviceDescriptor) (*Device, error) {
 	})
 
 	if status != RequestDeviceStatusSuccess {
-		return nil, errors.New("failed to request device")
+		return nil, fmt.Errorf("failed to request device: %s: %s", status, message)
 	}
 
 	return device, nil

@@ -4,7 +4,7 @@ package wgpu
 
 /*
 #include "gen_wgpu_wrappers.h"
-extern void gowebgpu_buffer_map_callback_c(WGPUMapAsyncStatus status, WGPUStringView message, void *userdata, void *userdata2);
+#include "callbacks.h"
 */
 import "C"
 import (
@@ -16,7 +16,17 @@ func (p *Buffer) Destroy() {
 }
 
 func (p *Buffer) GetMappedRange(offset, size uint) []byte {
+	if size == WholeMapSize {
+		size = uint(p.GetSize()) - offset
+	}
+
 	buf := C.wgpuBufferGetMappedRange(p.ref, C.size_t(offset), C.size_t(size))
+	if size == 0 {
+		// wgpu-core maps an empty range to a dangling pointer (0x1), which the Go
+		// runtime aborts on when it copies a stack that holds it.
+		return nil
+	}
+
 	return unsafe.Slice((*byte)(buf), size)
 }
 
